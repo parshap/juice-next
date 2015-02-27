@@ -10,24 +10,41 @@ var specificity = require("specificity");
 module.exports = function(html, css) {
   var dom = parseDOM(html);
   var cssTree = parseCSS(css);
-  setStyles(dom, cssTree);
+  forEachElement(dom, initializeStyles);
+  initializeStyles(dom);
+  applyStyles(dom, cssTree);
   forEachElement(dom, insertPseudoElements);
   forEachElement(dom, setStyleAttribute);
   return stringifyDOM(dom);
 };
 
-// Set a `styles` property on nodes that have any css rule applied. `styles`
-// will be an array of objects, each containing the applied rule and the
-// matching selector that.
-function setStyles(dom, cssTree) {
+function initializeStyles(el) {
+  el.styles = [];
+  if (el.attribs && el.attribs.style) {
+    var declarations = parseStyleAttribute(el.attribs.style);
+    el.styles.push({
+      declarations: declarations,
+      specificity: "1,0,0,0",
+    });
+  }
+}
+
+function parseStyleAttribute(style) {
+  var csstree = parseCSS("* { " + style + " }");
+  return csstree.stylesheet.rules[0].declarations;
+}
+
+// Apply styles from the given css ast to each dom element, adding style
+// objects to the elements' `styles` array (see the `initializeStyles`
+// function).
+function applyStyles(dom, cssTree) {
   forEachRule(cssTree.stylesheet, function(rule) {
     rule.selectors.forEach(function(selector) {
       var elements = getMatchingElements(selector, dom);
       elements.forEach(function(el) {
-        el.styles = el.styles || [];
         el.styles.push({
-          rule: rule,
-          selector: selector,
+          declarations: rule.declarations,
+          specificity: getSpecificity(selector),
         });
       });
     });
@@ -44,7 +61,9 @@ function setStyleAttribute(el) {
   }
 
   var decls = computeDeclarations(el.styles);
-  el.attribs.style = stringifyDeclarations(decls);
+  if (decls.length > 0) {
+    el.attribs.style = stringifyDeclarations(decls);
+  }
 }
 
 function insertPseudoElements(element) {
@@ -56,7 +75,7 @@ function computeDeclarations(styles) {
   styles = styles.slice();
   sortBySpecificty(styles);
   var declarations = styles.reduce(function(acc, style) {
-    return acc.concat(style.rule.declarations);
+    return acc.concat(style.declarations);
   }, []);
   var lastProps = {};
   declarations = declarations.filter(function(decl) {
@@ -70,6 +89,13 @@ function computeDeclarations(styles) {
 }
 
 function sortBySpecificty(styles) {
+  return styles.sort(function(a, b) {
+    return compareSelectorSpecificity(a.specificity, b.specificity);
+  });
+}
+
+function compareSelectorSpecificity(a, b) {
+  return a.localeCompare(b);
 }
 
 function stringifyDeclarations(declarations) {
@@ -98,9 +124,11 @@ function parseDOM(html) {
 
 function forEachElement(elements, fn) {
   elements.forEach(function(el) {
-    fn(el);
+    if (el.type === "tag") {
+      fn(el);
+    }
     if (el.children) {
-      forEachElement(el.children);
+      forEachElement(el.children, fn);
     }
   });
 }
@@ -116,6 +144,11 @@ function forEachRule(node, fn) {
       forEachRule(node, fn);
     });
   }
+}
+
+// Get the specificity string for the given selector
+function getSpecificity(selector) {
+  return specificity.calculate(selector)[0].specificity;
 }
 
 // rules = parse css rules
