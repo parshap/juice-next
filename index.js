@@ -5,12 +5,23 @@ var stringifyDOM = require("dom-serializer");
 var parseCSS = require("css").parse;
 var select = require("css-select");
 var specificity = require("specificity");
+var parseSelector = require("slick/parser");
+var toArray = require("to-array");
 
 // Use css module internals. This is why we specify an exact version for the
 // css module in package.json.
 var CSSCompiler = require("css/lib/stringify/compress");
 
-module.exports = function(html, css) {
+// Ignore selectors that use the following pseudo classes
+var IGNORED_PSEUDOS = [
+  "hover",
+  "active",
+  "focus",
+  "visisted",
+  "link"
+];
+
+function juice(html, css) {
   // We use dom to hold our state
   var dom = parseDOM(html);
   var cssTree = parseCSS(css);
@@ -22,7 +33,7 @@ module.exports = function(html, css) {
   // Set the style attribute based on each element's el.styles
   forEachElement(dom, setStyleAttribute);
   return stringifyDOM(dom);
-};
+}
 
 // Initialize an element's `el.styles` attribute with any inline styles
 function initializeStyles(el) {
@@ -47,13 +58,31 @@ function parseStyleAttribute(style) {
 // function).
 function applyStyles(dom, cssTree) {
   forEachRule(cssTree.stylesheet, function(rule) {
-    rule.selectors.forEach(function(selector) {
+    var selectors = rule.selectors.filter(shouldApplySelector);
+    selectors.forEach(function(selector) {
       var elements = select(selector, dom);
       elements.forEach(function(el) {
         el.styles.push({
           declarations: rule.declarations,
           specificity: getSpecificity(selector),
         });
+      });
+    });
+  });
+}
+
+// Determine if the given selector should be applied to the dom. Selectors with
+// pseudo elements and selectors with certain ignored pseudo classes are
+// not applied.
+function shouldApplySelector(selector) {
+  return toArray(parseSelector(selector)).every(function(part) {
+    return toArray(part).every(function(part) {
+      if ( ! part.pseudo) {
+        return true;
+      }
+      return part.pseudos.every(function(pseudo) {
+        return pseudo.type !== "element" &&
+          IGNORED_PSEUDOS.indexOf(pseudo.name) === -1;
       });
     });
   });
@@ -101,7 +130,15 @@ function compareSelectorSpecificity(a, b) {
 
 // Stringify an array of css ast declaration objects
 function stringifyDeclarations(declarations) {
+  // Escape values
+  declarations.forEach(function(declaration) {
+    declaration.value = escapeDeclarationValue(declaration.value);
+  });
   return new CSSCompiler().mapVisit(declarations);
+}
+
+function escapeDeclarationValue(value) {
+  return value.replace(/["]/g, "'");
 }
 
 // Sync htmlparser parser
@@ -153,3 +190,6 @@ function forEachRule(node, fn) {
 function getSpecificity(selector) {
   return specificity.calculate(selector)[0].specificity;
 }
+
+// ## Exports
+module.exports = juice;
