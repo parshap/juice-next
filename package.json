@@ -1,0 +1,48 @@
+{
+  "name": "juice",
+  "version": "1.0.0",
+  "description": "Inlines css into html source",
+  "bin": "./bin/juice",
+  "scripts": {
+    "test": "tape test.js"
+  },
+  "contributors": [
+    {
+      "name": "Guillermo Rauch",
+      "email": "guillermo@learnboost.com"
+    },
+    {
+      "name": "Arian Stolwijk",
+      "email": "arian@aryweb.nl"
+    },
+    {
+      "name": "Paweł Marzec",
+      "email": "rork@cojestgrane.pl"
+    },
+    {
+      "name": "Andrew Kelley",
+      "email": "superjoe30@gmail.com"
+    },
+    {
+      "name": "Francois-Guillaume Ribreau",
+      "email": "npm@fgribreau.com"
+    }
+  ],
+  "dependencies": {
+    "css": "2.2.0",
+    "css-select": "^1.0.0",
+    "cssom": "0.3.0",
+    "dom-serializer": "^0.1.0",
+    "htmlparser2": "^3.8.2",
+    "slick": "^1.12.1",
+    "specificity": "^0.1.4",
+    "to-array": "^0.1.4"
+  },
+  "devDependencies": {
+    "tape": "^3.5.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Automattic/juice.git"
+  }
+}
