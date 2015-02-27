@@ -17,6 +17,11 @@ testFromFile("test/cases/alpha");
 testFromFile("test/cases/cascading");
 testFromFile("test/cases/class+id");
 testFromFile("test/cases/class");
+testFromFile("test/cases/css-quotes");
+testFromFile("test/cases/direct-descendents");
+testFromFile("test/cases/empty");
+testFromFile("test/cases/id");
+testFromFile("test/cases/identical-important");
 
 function testFromFile(basename) {
   test(basename, function(t) {

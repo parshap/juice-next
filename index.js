@@ -21,6 +21,9 @@ var IGNORED_PSEUDOS = [
   "link"
 ];
 
+// A regular expression to match "!important" in property values
+var IMPORTANT_REGEX = /\s*!\s*important\s*$/;
+
 function juice(html, css) {
   // We use dom to hold our state
   var dom = parseDOM(html);
@@ -103,10 +106,24 @@ function setStyleAttribute(el) {
 function computeDeclarations(styles) {
   // Don't mutate the input
   styles = styles.slice();
-  sortBySpecificty(styles);
   var declarations = styles.reduce(function(acc, style) {
+    // Add an extra dimension of specificity to take into account !important
+    // so we can achieve the correct calculated styles without actually using
+    // !important, as some email clients don't support properties with
+    // !important.
+    style.declarations.forEach(function(declaration) {
+      if (isValueImportant(declaration.value)) {
+        declaration.specificity = "1," + style.specificity;
+      }
+      else {
+        declaration.specificity = "0," + style.specificity;
+      }
+      // Strip !important since we account for it by sorting
+      declaration.value = removeImportant(declaration.value);
+    });
     return acc.concat(style.declarations);
   }, []);
+  sortBySpecificty(declarations);
   var lastProps = {};
   declarations = declarations.filter(function(decl) {
     if (lastProps[decl.property] === decl.value) {
@@ -139,6 +156,14 @@ function stringifyDeclarations(declarations) {
 
 function escapeDeclarationValue(value) {
   return value.replace(/["]/g, "'");
+}
+
+function isValueImportant(value) {
+  return IMPORTANT_REGEX.test(value);
+}
+
+function removeImportant(value) {
+  return value.replace(IMPORTANT_REGEX, "");
 }
 
 // Sync htmlparser parser
