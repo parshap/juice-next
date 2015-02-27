@@ -14,6 +14,7 @@ test("default", function(t) {
 });
 
 testFromFile("test/cases/alpha");
+testFromFile("test/cases/cascading");
 
 function testFromFile(basename) {
   test(basename, function(t) {

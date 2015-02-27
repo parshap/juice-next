@@ -3,21 +3,28 @@
 var htmlparser = require("htmlparser2");
 var stringifyDOM = require("dom-serializer");
 var parseCSS = require("css").parse;
-var CSSCompiler = require("css/lib/stringify/compress");
 var select = require("css-select");
 var specificity = require("specificity");
 
+// Use css module internals. This is why we specify an exact version for the
+// css module in package.json.
+var CSSCompiler = require("css/lib/stringify/compress");
+
 module.exports = function(html, css) {
+  // We use dom to hold our state
   var dom = parseDOM(html);
   var cssTree = parseCSS(css);
+
+  // Add el.styles to each dom element
   forEachElement(dom, initializeStyles);
-  initializeStyles(dom);
+  // Add matching css rules to each element's el.styles
   applyStyles(dom, cssTree);
-  forEachElement(dom, insertPseudoElements);
+  // Set the style attribute based on each element's el.styles
   forEachElement(dom, setStyleAttribute);
   return stringifyDOM(dom);
 };
 
+// Initialize an element's `el.styles` attribute with any inline styles
 function initializeStyles(el) {
   el.styles = [];
   if (el.attribs && el.attribs.style) {
@@ -29,6 +36,7 @@ function initializeStyles(el) {
   }
 }
 
+// Parse a style attribute string (a set of declarations)
 function parseStyleAttribute(style) {
   var csstree = parseCSS("* { " + style + " }");
   return csstree.stylesheet.rules[0].declarations;
@@ -40,7 +48,7 @@ function parseStyleAttribute(style) {
 function applyStyles(dom, cssTree) {
   forEachRule(cssTree.stylesheet, function(rule) {
     rule.selectors.forEach(function(selector) {
-      var elements = getMatchingElements(selector, dom);
+      var elements = select(selector, dom);
       elements.forEach(function(el) {
         el.styles.push({
           declarations: rule.declarations,
@@ -49,10 +57,6 @@ function applyStyles(dom, cssTree) {
       });
     });
   });
-}
-
-function getMatchingElements(selector, dom) {
-  return select(selector, dom);
 }
 
 function setStyleAttribute(el) {
@@ -64,9 +68,6 @@ function setStyleAttribute(el) {
   if (decls.length > 0) {
     el.attribs.style = stringifyDeclarations(decls);
   }
-}
-
-function insertPseudoElements(element) {
 }
 
 // Return a sorted array of css properties that gtgt
@@ -98,6 +99,7 @@ function compareSelectorSpecificity(a, b) {
   return a.localeCompare(b);
 }
 
+// Stringify an array of css ast declaration objects
 function stringifyDeclarations(declarations) {
   return new CSSCompiler().mapVisit(declarations);
 }
@@ -122,6 +124,7 @@ function parseDOM(html) {
   return dom;
 }
 
+// Walk all dom nodes, calling a function for each element node
 function forEachElement(elements, fn) {
   elements.forEach(function(el) {
     if (el.type === "tag") {
@@ -150,24 +153,3 @@ function forEachRule(node, fn) {
 function getSpecificity(selector) {
   return specificity.calculate(selector)[0].specificity;
 }
-
-// rules = parse css rules
-//
-// for each rule:
-//   continue if rule should be ignored (e.g., some pseudo selectors)
-//   for each element matching rule:
-//     initialize list of properties from style attribute
-//     add each rule property and specificity to list of properties
-//
-// for each pseudo element rule:
-//   continue if rule should be ignored (e.g., some pseudo selectors)
-//   strip pseudo part from selector
-//   for each element matching selector:
-//     element.pseudo[After|Before] = new <span>
-//     element.pseudo.styles = each rule property and specificity
-//
-// insert pseudo element
-//
-// for each element:
-//   set style attribute
-//
