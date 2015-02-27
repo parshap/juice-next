@@ -17,7 +17,7 @@ var IGNORED_PSEUDOS = [
   "hover",
   "active",
   "focus",
-  "visisted",
+  "visited",
   "link"
 ];
 
@@ -27,7 +27,7 @@ var IMPORTANT_REGEX = /\s*!\s*important\s*$/;
 function juice(html, css) {
   // We use dom to hold our state
   var dom = parseDOM(html);
-  var cssTree = parseCSS(css);
+  var cssTree = parseCSS(css, { silent: true });
 
   // Add el.styles to each dom element
   forEachElement(dom, initializeStyles);
@@ -80,7 +80,7 @@ function applyStyles(dom, cssTree) {
 function shouldApplySelector(selector) {
   return toArray(parseSelector(selector)).every(function(part) {
     return toArray(part).every(function(part) {
-      if ( ! part.pseudo) {
+      if ( ! part.pseudos) {
         return true;
       }
       return part.pseudos.every(function(pseudo) {

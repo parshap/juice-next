@@ -14,6 +14,7 @@ test("default", function(t) {
 });
 
 testFromFile("test/cases/alpha");
+testFromFile("test/cases/bad-css");
 testFromFile("test/cases/cascading");
 testFromFile("test/cases/class+id");
 testFromFile("test/cases/class");
@@ -22,6 +23,8 @@ testFromFile("test/cases/direct-descendents");
 testFromFile("test/cases/empty");
 testFromFile("test/cases/id");
 testFromFile("test/cases/identical-important");
+testFromFile("test/cases/ignore-pseudos");
+testFromFile("test/cases/important");
 
 function testFromFile(basename) {
   test(basename, function(t) {
