@@ -1,5 +1,18 @@
 "use strict";
 
+// # Juice
+//
+// 1. Parse the given html into a dom object. This dom object is used to hold
+// state, and also what we use to later generate the html string to return.
+//
+// 2. Calculate the styles that apply to each element. This is based on
+// existing inline styles and the given css. The result gets stored in each dom
+// element object's `el.styles` property.  (stored in el.styles)
+//
+// 2. Mutate the dom object so that when we stringify it we get the result that
+// we want (i.e, set the style attributes)
+//
+
 var htmlparser = require("htmlparser2");
 var stringifyDOM = require("dom-serializer");
 var parseCSS = require("css").parse;
@@ -24,35 +37,59 @@ var IGNORED_PSEUDOS = [
 // A regular expression to match "!important" in property values
 var IMPORTANT_REGEX = /\s*!\s*important\s*$/;
 
+// ## Entry point
+//
+// Take an html string and css string and return an html string with the css
+// "inlined".
+//
+
 function juice(html, css) {
-  // We use dom to hold our state
+  // Parse the HTML and CSS into object models
   var dom = parseDOM(html);
   var cssTree = parseCSS(css, { silent: true });
 
-  // Add el.styles to each dom element
-  forEachElement(dom, initializeStyles);
-  // Add matching css rules to each element's el.styles
-  applyStyles(dom, cssTree);
-  // Set the style attribute based on each element's el.styles
+  // Calculate the styles applied to each dom element, setting el.style for
+  // each dom element object
+  calculateStyles(dom, cssTree);
+
+  // "Inline" styles by setting each element's style attribute based on
+  // el.styles
   forEachElement(dom, setStyleAttribute);
+
   return stringifyDOM(dom);
 }
 
-// Initialize an element's `el.styles` attribute with any inline styles
+// ## Calculate Styles
+//
+// For each element in the dom, calculate the styles that apply to it and store
+// them in the `styles` property of the element object.
+//
+
+function calculateStyles(dom, cssTree) {
+  // Initialize el.styles with the element's inline styles
+  forEachElement(dom, initializeStyles);
+  // Add matching css rules to each element's el.styles
+  applyStyles(dom, cssTree);
+}
+
+// Initialize an element's `el.styles` property using its inline styles
 function initializeStyles(el) {
   el.styles = [];
   if (el.attribs && el.attribs.style) {
     var declarations = parseStyleAttribute(el.attribs.style);
     el.styles.push({
       declarations: declarations,
-      specificity: "1,0,0,0",
+      specificity: "1,0,0,0", // inline style specificity
     });
   }
 }
 
 // Parse a style attribute string (a set of declarations)
 function parseStyleAttribute(style) {
-  var csstree = parseCSS("* { " + style + " }");
+  // Wrap the style declarations around a fake selector so that the CSS parser
+  // can parse it.
+  var csstree = parseCSS("fake-selector { " + style + " }");
+  // Pull out just the declarations from the parsed object
   return csstree.stylesheet.rules[0].declarations;
 }
 
@@ -61,22 +98,25 @@ function parseStyleAttribute(style) {
 // function).
 function applyStyles(dom, cssTree) {
   forEachRule(cssTree.stylesheet, function(rule) {
+    var declarations = rule.declarations;
     var selectors = rule.selectors.filter(shouldApplySelector);
     selectors.forEach(function(selector) {
-      var elements = select(selector, dom);
-      elements.forEach(function(el) {
-        el.styles.push({
-          declarations: rule.declarations,
-          specificity: getSpecificity(selector),
-        });
+      // Create an object containing the declarations of this rule and its
+      // specificity
+      var style = {
+        declarations: declarations,
+        specificity: getSpecificity(selector),
+      };
+      // Add the style to all elements that match the selector
+      select(selector, dom).forEach(function(el) {
+        el.styles.push(style);
       });
     });
   });
 }
 
-// Determine if the given selector should be applied to the dom. Selectors with
-// pseudo elements and selectors with certain ignored pseudo classes are
-// not applied.
+// Determine if the selector should affect styles of matching elements.
+// Selectors with pseudo elements and certain pseudo classes are ignored.
 function shouldApplySelector(selector) {
   return toArray(parseSelector(selector)).every(function(part) {
     return toArray(part).every(function(part) {
@@ -91,8 +131,15 @@ function shouldApplySelector(selector) {
   });
 }
 
+// ## Inline Styles
+//
+// "Inline" styles by setting the element's style attribute based on its
+// `styles` property that was populated earlier by calculateStyles().
+//
+
 function setStyleAttribute(el) {
   if ( ! el.styles) {
+    // This element has no styles
     return;
   }
 
@@ -104,14 +151,13 @@ function setStyleAttribute(el) {
 
 // Return a sorted array of css properties that gtgt
 function computeDeclarations(styles) {
-  // Don't mutate the input
-  styles = styles.slice();
   var declarations = styles.reduce(function(acc, style) {
     // Add an extra dimension of specificity to take into account !important
     // so we can achieve the correct calculated styles without actually using
     // !important, as some email clients don't support properties with
     // !important.
     style.declarations.forEach(function(declaration) {
+      // @TODO Don't mutate the input
       if (isValueImportant(declaration.value)) {
         declaration.specificity = "1," + style.specificity;
       }
@@ -124,14 +170,7 @@ function computeDeclarations(styles) {
     return acc.concat(style.declarations);
   }, []);
   sortBySpecificty(declarations);
-  var lastProps = {};
-  declarations = declarations.filter(function(decl) {
-    if (lastProps[decl.property] === decl.value) {
-      return false;
-    }
-    lastProps[decl.property] = decl.value;
-    return true;
-  });
+  declarations = filterDuplicateValues(declarations);
   return declarations;
 }
 
@@ -143,6 +182,19 @@ function sortBySpecificty(styles) {
 
 function compareSelectorSpecificity(a, b) {
   return a.localeCompare(b);
+}
+
+function filterDuplicateValues(declarations) {
+  // Keep track of the last value for each css property so we can remove
+  // duplicates with the same values.
+  var lastProps = {};
+  return declarations.filter(function(decl) {
+    if (lastProps[decl.property] === decl.value) {
+      return false;
+    }
+    lastProps[decl.property] = decl.value;
+    return true;
+  });
 }
 
 // Stringify an array of css ast declaration objects
@@ -217,4 +269,6 @@ function getSpecificity(selector) {
 }
 
 // ## Exports
+//
+
 module.exports = juice;
